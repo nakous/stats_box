@@ -21,12 +21,7 @@ class StatsBlock extends BlockBase {
   /**
    * {@inheritdoc}
    */
-  public function build() {
-    return array(
-      '#type' => 'markup',
-      '#markup' => 'This block list the article.',
-    );
-  }
+
   public function blockForm($form, FormStateInterface $form_state) {
   
   // Content Type
@@ -50,13 +45,18 @@ foreach ($contentTypes as $contentType) {
     );
     
   // Option published
-  $form['field'] = array(
+  $form['published'] = array(
       '#type' => 'checkbox',
       '#title' => $this->t('Published'),
       '#description' => $this->t('Filter by published node'),
-      '#default_value' => isset($this->configuration['field']) ? $this->configuration['field'] : ''
+      '#default_value' => isset($this->configuration['published']) ? $this->configuration['published'] : ''
     );   
-	
+	$form['prefix'] = array(
+      '#type' => 'textfield',
+      '#title' => $this->t('Prefix'),
+      '#description' => $this->t('Prefix €, $ ...'),
+      '#default_value' => isset($this->configuration['prefix']) ? $this->configuration['prefix'] : ''
+    );  
   //Field name
   foreach ($contentTypes as $contentType) {
 	  $fields = \Drupal::service('entity_field.manager')->getFieldDefinitions('node', $contentType->id());
@@ -94,6 +94,69 @@ foreach ($contentTypes as $contentType) {
     );    
     return $form;
   }
+  
+  /**
+   * {@inheritdoc}
+   */
+  public function blockSubmit($form, FormStateInterface $form_state) {
+    $this->configuration['calc'] = $form_state->getValue('calc');
+    $this->configuration['type'] = $form_state->getValue('type');
+    $this->configuration['field'] = $form_state->getValue('field');
+    $this->configuration['published'] = $form_state->getValue('published');
+    $this->configuration['prefix'] = $form_state->getValue('prefix');
+  }
+  
+    public function build() {
+		$val = 0;
+		$connection = \Drupal::database();
+		
+		$opt=$this->configuration['calc'];
+		$type=$this->configuration['type'];
+		$pub=$this->configuration['published'];
+		$field=$this->configuration['field'];
+		$prefix=$this->configuration['prefix'];
+		
+		$result = \Drupal::entityQuery('node')
+			->condition('type', $type);
+		if($pub)
+			$result->condition('status', 1);
+		
+		if ($opt=='count'){			 
+			 $val = $result->count()->execute();
+		}else{
+			$nids=$result->execute();
+			$nodes=  \Drupal\node\Entity\Node::loadMultiple($nids);;
+			$values=array();
+			foreach ($nodes as $node){
+			  $values[] = $node->get($field)->value;
+			}
+			
+			if ($opt=='sum'){
+				$val = array_sum($values);
+			}
+			if ($opt=='max'){
+				$val = max($values);
+			}
+			if ($opt=='min'){
+				$val = min($values);
+			}
+			if ($opt=='average'){
+				$val = array_sum($values)/count($values);
+			}
+		}
+		
+				 
+		   
+		  
+		return array(
+		  '#type' => 'markup',
+		  '#markup' =>  '<span class="value number h1">'.$val .'</span><span class="prefix h3">'.$prefix .'</span>',
+		);
+	  }
+	 
+  
+  
+  /*
 	public function ajax_box_callback(array &$form, FormStateInterface $form_state)    {
 		  // $elem = [
 		  // '#type' => 'textfield',
@@ -107,7 +170,7 @@ foreach ($contentTypes as $contentType) {
 
 		  return $form['field'];
 		}
-	/*
+	
 	{
 		$listFields= array();
 		$type = $form_state->getValue('type');
@@ -128,12 +191,4 @@ foreach ($contentTypes as $contentType) {
 		 $form_state->setRebuild();
     return $form['field'];
 	}*/
-  /**
-   * {@inheritdoc}
-   */
-  public function blockSubmit($form, FormStateInterface $form_state) {
-    $this->configuration['calc'] = $form_state->getValue('calc');
-    $this->configuration['type'] = $form_state->getValue('type');
-    $this->configuration['field'] = $form_state->getValue('field');
-  }
 }
